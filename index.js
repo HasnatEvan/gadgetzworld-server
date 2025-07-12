@@ -58,7 +58,6 @@ async function startServer() {
     userCollection = client.db('GadgetzWorld-client').collection('users');
     ProductCollection = client.db('GadgetzWorld-client').collection('products');
     wishlistCollection = client.db('GadgetzWorld-client').collection('wishlist');
-    cartCollection = client.db('GadgetzWorld-client').collection('carts');
     orderCollection = client.db('GadgetzWorld-client').collection('orders');
 
     // Routes
@@ -193,83 +192,70 @@ async function startServer() {
       }
     });
 
-
-    // Add to cart -------------------------->
-
-    app.post('/carts', async (req, res) => {
-      const product = req.body;
-      const result = await cartCollection.insertOne(product)
-      res.send(result)
-    })
-    app.get('/carts', async (req, res) => {
-      const email = req.query.email;
-
-      if (!email) {
-        return res.status(400).send({ message: "Email query is required" });
-      }
-
-      try {
-        const result = await cartCollection.find({ userEmail: email }).toArray();
-        res.send(result);
-      } catch (error) {
-        console.error("Error fetching cart:", error);
-        res.status(500).send({ message: "Internal server error" });
-      }
-    });
-    app.delete('/carts/:id', async (req, res) => {
-      const id = req.params.id;
-
-      if (!id) {
-        return res.status(400).send({ message: "Cart item ID is required" });
-      }
-
-      try {
-        const result = await cartCollection.deleteOne({ _id: new ObjectId(id) });
-        if (result.deletedCount > 0) {
-          res.send({ deletedCount: result.deletedCount, message: "Cart item removed" });
-        } else {
-          res.status(404).send({ message: "Cart item not found" });
-        }
-      } catch (error) {
-        console.error("Error deleting cart item:", error);
-        res.status(500).send({ message: "Internal server error" });
-      }
-    });
-
-    app.patch('/carts/:id', async (req, res) => {
-      const id = req.params.id;
-      const { quantity } = req.body;
-
-      if (quantity < 1) {
-        return res.status(400).send({ message: "Quantity must be at least 1" });
-      }
-
-      try {
-        const result = await cartCollection.updateOne(
-          { _id: new ObjectId(id) },
-          { $set: { quantity: quantity } }
-        );
-        res.send(result);
-      } catch (error) {
-        console.error("Error updating quantity:", error);
-        res.status(500).send({ message: "Internal server error" });
-      }
-    });
-
-
     // Order Collection---------------------->
 
-app.post('/orders', verifyToken, async (req, res) => {
-  const product = req.body;
-  // Create a formatted date string in DD-MM-YYYY
-  const now = new Date();
-  const formattedDate = now.toLocaleDateString('en-GB'); // eg. "10/07/2025"
-  product.orderDate = formattedDate; // add formatted date
-  const result = await orderCollection.insertOne(product);
-  res.send(result);
-});
+    app.post('/orders', verifyToken, async (req, res) => {
+      const product = req.body;
 
+      const now = new Date();
 
+      // Date: DD-MM-YYYY
+      const date = now.toLocaleDateString('en-GB'); // e.g. 10/07/2025
+
+      // Time: HH:MM AM/PM
+      const time = now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      }); // e.g. 03:45 PM
+
+      product.orderDate = `${date} ${time}`; // "10/07/2025 03:45 PM"
+
+      try {
+        const result = await orderCollection.insertOne(product);
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: 'Failed to create order' });
+      }
+    });
+
+    app.patch('/products/quantity/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const { quantityToUpdate, status } = req.body;
+
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ error: "Invalid ID" });
+      }
+
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $inc: {
+          quantity: status === 'increase' ? quantityToUpdate : -quantityToUpdate
+        }
+      };
+
+      try {
+        const result = await ProductCollection.updateOne(filter, updateDoc);
+        res.send(result);
+      } catch (error) {
+        console.error("Update error:", error);
+        res.status(500).send({ error: "Quantity update failed." });
+      }
+    });
+
+    // get all orders data in db
+    app.get('/orders', verifyToken, async (req, res) => {
+      const result = await orderCollection.find().toArray()
+      res.send(result)
+    })
+    // get a order by id
+    app.get('/orders/:id', async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const result = await orderCollection.findOne(query)
+      res.send(result)
+    })
 
 
 
