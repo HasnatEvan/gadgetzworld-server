@@ -126,12 +126,67 @@ async function startServer() {
 
 
     // product ----------------------------->
+//  get inventory data for  seller
+app.get('/products/seller', verifyToken,  async (req, res) => {
+    const email = req.user.email
+    const result = await ProductCollection.find({ 'seller.email': email }).toArray()
+    res.send(result)
+})
+// delete a product from db by seller
+app.delete('/products/:id', verifyToken, async (req, res) => {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) }
+    const result = await ProductCollection.deleteOne(query)
+    res.send(result)
+})
+
+app.put("/products/:id", verifyToken, async (req, res) => {
+  const id = req.params.id;
+  const updatedProduct = req.body;
+
+  const filter = { _id: new ObjectId(id) };
+
+  const updatedDoc = {
+    $set: {
+      productName: updatedProduct.productName,
+      description: updatedProduct.description,
+      price: updatedProduct.price,
+      discount: updatedProduct.discount,
+      totalPrice: updatedProduct.totalPrice,
+      quantity: updatedProduct.quantity,
+      bkashNumber: updatedProduct.bkashNumber,
+      nagadNumber: updatedProduct.nagadNumber,
+      category: updatedProduct.category,
+      images: updatedProduct.images,
+      seller: updatedProduct.seller,
+      createdAt: updatedProduct.createdAt,
+    },
+  };
+
+  try {
+    const result = await ProductCollection.updateOne(filter, updatedDoc);
+
+    if (result.modifiedCount > 0) {
+      res.status(200).json({ message: "✅ Product updated successfully!" });
+    } else {
+      res.status(400).json({ message: "No changes made to the product." });
+    }
+  } catch (error) {
+    console.error("❌ Error updating product:", error);
+    res
+      .status(500)
+      .json({ message: "An error occurred while updating the product." });
+  }
+});
+
+
+
+
     app.post('/products', verifyToken, async (req, res) => {
       const product = req.body;
       const result = await ProductCollection.insertOne(product)
       res.send(result)
     })
-
     // get all product data in db
     app.get('/products', async (req, res) => {
       const result = await ProductCollection.find().toArray()
@@ -219,7 +274,6 @@ async function startServer() {
         res.status(500).send({ error: 'Failed to create order' });
       }
     });
-
     app.patch('/products/quantity/:id', verifyToken, async (req, res) => {
       const id = req.params.id;
       const { quantityToUpdate, status } = req.body;
@@ -243,7 +297,6 @@ async function startServer() {
         res.status(500).send({ error: "Quantity update failed." });
       }
     });
-
     // get all orders data in db
     app.get('/orders', verifyToken, async (req, res) => {
       const result = await orderCollection.find().toArray()
@@ -256,6 +309,83 @@ async function startServer() {
       const result = await orderCollection.findOne(query)
       res.send(result)
     })
+    // update a order status
+    app.patch('/update-order-status/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const { status } = req.body;
+
+      try {
+        // অর্ডার খুঁজে বের করা
+        const orderInfo = await orderCollection.findOne({ _id: new ObjectId(id) });
+
+        if (!orderInfo) {
+          return res.status(404).send({ message: 'Order not found' });
+        }
+
+        // আগের স্ট্যাটাসের সাথে নতুন স্ট্যাটাস এক হলে কিছু করার দরকার নেই
+        if (orderInfo.status === status) {
+          return res.status(400).send({ message: 'Order status is already updated' });
+        }
+
+        // নতুন স্ট্যাটাস সেট করা
+        const result = await orderCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status } }
+        );
+
+        if (result.modifiedCount > 0) {
+          return res.send({ message: 'Order status updated successfully', modifiedCount: result.modifiedCount });
+        } else {
+          return res.status(500).send({ message: 'Failed to update order status' });
+        }
+
+      } catch (error) {
+        console.error('Error updating order status:', error);
+        return res.status(500).send({ message: 'Server error' });
+      }
+    });
+    // Cancel Order
+    app.delete('/orders/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+
+      try {
+        const order = await orderCollection.findOne(query);
+
+        if (!order) {
+          return res.status(404).send({ message: "Order not found" });
+        }
+
+        if (order.status === 'Delivered') {
+          return res.status(409).send({ message: "Cannot cancel once the product is delivered" });
+        }
+
+        const result = await orderCollection.deleteOne(query);
+        res.send({
+          message: "Order cancelled successfully",
+          deletedCount: result.deletedCount
+        });
+
+      } catch (error) {
+        console.error("Error cancelling order:", error);
+        res.status(500).send({ message: "Server error while cancelling order" });
+      }
+    });
+
+
+    // get order customer
+    app.get('/customer-orders/:email', verifyToken, async (req, res) => {
+      try {
+        const email = req.params.email;
+        const query = { 'customer.email': email };
+        const orders = await orderCollection.find(query).toArray();
+
+        res.send(orders);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Failed to fetch customer orders" });
+      }
+    });
 
 
 
