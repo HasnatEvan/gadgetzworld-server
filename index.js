@@ -386,6 +386,140 @@ app.put("/products/:id", verifyToken, async (req, res) => {
         res.status(500).send({ message: "Failed to fetch customer orders" });
       }
     });
+app.get('/admin-stat', verifyToken, async (req, res) => {
+  try {
+    const totalUsers = await userCollection.estimatedDocumentCount();
+    const totalProducts = await ProductCollection.estimatedDocumentCount();
+    const totalOrders = await orderCollection.estimatedDocumentCount();
+    const totalWishlist = await wishlistCollection.estimatedDocumentCount();
+
+    // আজকের তারিখ 0:00 থেকে
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29); // ৩০ দিনের জন্য
+
+    // ৩০ দিনের তারিখের লিস্ট
+    const dateList = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date(thirtyDaysAgo);
+      d.setDate(d.getDate() + i);
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${dd}/${mm}/${yyyy}`;
+    });
+
+    const todayStr = dateList[29];
+
+    // আজকের completed অর্ডার
+    const todayCompletedOrders = await orderCollection.find({
+      orderDate: { $regex: `^${todayStr}` },
+      status: "completed",
+    }).toArray();
+
+    const todayTotalSell = todayCompletedOrders.reduce(
+      (sum, order) => sum + (order.totalPrice || 0),
+      0
+    );
+
+    // সব সময়ের completed অর্ডার
+    const allCompletedOrders = await orderCollection.find({ status: "completed" }).toArray();
+
+    const overallTotalSell = allCompletedOrders.reduce(
+      (sum, order) => sum + (order.totalPrice || 0),
+      0
+    );
+
+    // ৩০ দিনের অর্ডার ও বিক্রয়
+    const ordersLast30Days = await orderCollection.aggregate([
+      {
+        $match: {
+          orderDate: {
+            $regex: `^(${dateList.join('|')})`
+          }
+        }
+      },
+      {
+        $project: {
+          dateOnly: { $substr: ["$orderDate", 0, 10] },
+          totalPrice: 1
+        }
+      },
+      {
+        $group: {
+          _id: "$dateOnly",
+          count: { $sum: 1 },
+          totalSell: { $sum: "$totalPrice" }
+        }
+      },
+      {
+        $sort: { _id: 1 }
+      }
+    ]).toArray();
+
+    let orderCounts = {};
+    let sellCounts = {};
+
+    dateList.forEach(date => {
+      orderCounts[date] = 0;
+      sellCounts[date] = 0;
+    });
+
+    ordersLast30Days.forEach(item => {
+      orderCounts[item._id] = item.count;
+      sellCounts[item._id] = item.totalSell;
+    });
+
+    // সর্বোচ্চ ডিসকাউন্ট ক্যাটেগরি
+    const topDiscountCategoryAgg = await ProductCollection.aggregate([
+      {
+        $match: {
+          discount: { $gt: 0 }
+        }
+      },
+      {
+        $group: {
+          _id: "$category",
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { count: -1 }
+      },
+      {
+        $limit: 1
+      }
+    ]).toArray();
+
+    const topDiscountCategory = topDiscountCategoryAgg[0]?._id || "N/A";
+    const discountedItemsCount = topDiscountCategoryAgg[0]?.count || 0;
+
+    // মোট ডিসকাউন্ট প্রোডাক্ট
+    const totalDiscountItems = await ProductCollection.countDocuments({
+      discount: { $gt: 0 }
+    });
+
+    // রেসপন্স পাঠাও
+    res.send({
+      totalUsers,
+      totalProducts,
+      totalOrders,
+      totalWishlist,
+      orderCounts,
+      sellCounts,
+      todayTotalSell,
+      overallTotalSell,
+      topDiscountCategory,
+      discountedItemsCount,
+      totalDiscountItems
+    });
+
+  } catch (error) {
+    console.error("Admin stat error:", error);
+    res.status(500).send({ message: "Something went wrong!" });
+  }
+});
+
 
 
 
@@ -404,6 +538,6 @@ app.put("/products/:id", verifyToken, async (req, res) => {
   } catch (error) {
     console.error('Error starting server:', error);
   }
-}
+  }
 
 startServer();
