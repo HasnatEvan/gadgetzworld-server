@@ -10,7 +10,7 @@ const app = express();
 
 // Middleware setup
 const corsOptions = {
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
+  origin: ['http://localhost:5173', 'https://gadgetz-world-360f2.web.app', 'https://gadgetz-world-360f2.firebaseapp.com'],
   credentials: true,
   optionSuccessStatus: 200,
 };
@@ -51,7 +51,7 @@ let userCollection;
 async function startServer() {
   try {
     // Connect client
-    await client.connect();
+    // await client.connect();
     console.log('Connected to MongoDB');
 
     // Assign collection after connect
@@ -59,6 +59,7 @@ async function startServer() {
     ProductCollection = client.db('GadgetzWorld-client').collection('products');
     wishlistCollection = client.db('GadgetzWorld-client').collection('wishlist');
     orderCollection = client.db('GadgetzWorld-client').collection('orders');
+    BannerCollection = client.db('GadgetzWorld-client').collection('banners');
 
     // Routes
 
@@ -126,58 +127,58 @@ async function startServer() {
 
 
     // product ----------------------------->
-//  get inventory data for  seller
-app.get('/products/seller', verifyToken,  async (req, res) => {
-    const email = req.user.email
-    const result = await ProductCollection.find({ 'seller.email': email }).toArray()
-    res.send(result)
-})
-// delete a product from db by seller
-app.delete('/products/:id', verifyToken, async (req, res) => {
-    const id = req.params.id;
-    const query = { _id: new ObjectId(id) }
-    const result = await ProductCollection.deleteOne(query)
-    res.send(result)
-})
+    //  get inventory data for  seller
+    app.get('/products/seller', verifyToken, async (req, res) => {
+      const email = req.user.email
+      const result = await ProductCollection.find({ 'seller.email': email }).toArray()
+      res.send(result)
+    })
+    // delete a product from db by seller
+    app.delete('/products/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) }
+      const result = await ProductCollection.deleteOne(query)
+      res.send(result)
+    })
 
-app.put("/products/:id", verifyToken, async (req, res) => {
-  const id = req.params.id;
-  const updatedProduct = req.body;
+    app.put("/products/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const updatedProduct = req.body;
 
-  const filter = { _id: new ObjectId(id) };
+      const filter = { _id: new ObjectId(id) };
 
-  const updatedDoc = {
-    $set: {
-      productName: updatedProduct.productName,
-      description: updatedProduct.description,
-      price: updatedProduct.price,
-      discount: updatedProduct.discount,
-      totalPrice: updatedProduct.totalPrice,
-      quantity: updatedProduct.quantity,
-      bkashNumber: updatedProduct.bkashNumber,
-      nagadNumber: updatedProduct.nagadNumber,
-      category: updatedProduct.category,
-      images: updatedProduct.images,
-      seller: updatedProduct.seller,
-      createdAt: updatedProduct.createdAt,
-    },
-  };
+      const updatedDoc = {
+        $set: {
+          productName: updatedProduct.productName,
+          description: updatedProduct.description,
+          price: updatedProduct.price,
+          discount: updatedProduct.discount,
+          totalPrice: updatedProduct.totalPrice,
+          quantity: updatedProduct.quantity,
+          bkashNumber: updatedProduct.bkashNumber,
+          nagadNumber: updatedProduct.nagadNumber,
+          category: updatedProduct.category,
+          images: updatedProduct.images,
+          seller: updatedProduct.seller,
+          createdAt: updatedProduct.createdAt,
+        },
+      };
 
-  try {
-    const result = await ProductCollection.updateOne(filter, updatedDoc);
+      try {
+        const result = await ProductCollection.updateOne(filter, updatedDoc);
 
-    if (result.modifiedCount > 0) {
-      res.status(200).json({ message: "✅ Product updated successfully!" });
-    } else {
-      res.status(400).json({ message: "No changes made to the product." });
-    }
-  } catch (error) {
-    console.error("❌ Error updating product:", error);
-    res
-      .status(500)
-      .json({ message: "An error occurred while updating the product." });
-  }
-});
+        if (result.modifiedCount > 0) {
+          res.status(200).json({ message: "✅ Product updated successfully!" });
+        } else {
+          res.status(400).json({ message: "No changes made to the product." });
+        }
+      } catch (error) {
+        console.error("❌ Error updating product:", error);
+        res
+          .status(500)
+          .json({ message: "An error occurred while updating the product." });
+      }
+    });
 
 
 
@@ -386,142 +387,166 @@ app.put("/products/:id", verifyToken, async (req, res) => {
         res.status(500).send({ message: "Failed to fetch customer orders" });
       }
     });
-app.get('/admin-stat', verifyToken, async (req, res) => {
-  try {
-    const totalUsers = await userCollection.estimatedDocumentCount();
-    const totalProducts = await ProductCollection.estimatedDocumentCount();
-    const totalOrders = await orderCollection.estimatedDocumentCount();
-    const totalWishlist = await wishlistCollection.estimatedDocumentCount();
+    app.get('/admin-stat', verifyToken, async (req, res) => {
+      try {
+        const totalUsers = await userCollection.estimatedDocumentCount();
+        const totalProducts = await ProductCollection.estimatedDocumentCount();
+        const totalOrders = await orderCollection.estimatedDocumentCount();
+        const totalWishlist = await wishlistCollection.estimatedDocumentCount();
 
-    // আজকের তারিখ 0:00 থেকে
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29); // ৩০ দিনের জন্য
+        // আজকের তারিখ 0:00 থেকে
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const thirtyDaysAgo = new Date(today);
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29); // ৩০ দিনের জন্য
 
-    // ৩০ দিনের তারিখের লিস্ট
-    const dateList = Array.from({ length: 30 }, (_, i) => {
-      const d = new Date(thirtyDaysAgo);
-      d.setDate(d.getDate() + i);
-      const dd = String(d.getDate()).padStart(2, '0');
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const yyyy = d.getFullYear();
-      return `${dd}/${mm}/${yyyy}`;
-    });
+        // ৩০ দিনের তারিখের লিস্ট
+        const dateList = Array.from({ length: 30 }, (_, i) => {
+          const d = new Date(thirtyDaysAgo);
+          d.setDate(d.getDate() + i);
+          const dd = String(d.getDate()).padStart(2, '0');
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const yyyy = d.getFullYear();
+          return `${dd}/${mm}/${yyyy}`;
+        });
 
-    const todayStr = dateList[29];
+        const todayStr = dateList[29];
 
-    // আজকের completed অর্ডার
-    const todayCompletedOrders = await orderCollection.find({
-      orderDate: { $regex: `^${todayStr}` },
-      status: "completed",
-    }).toArray();
+        // আজকের completed অর্ডার
+        const todayCompletedOrders = await orderCollection.find({
+          orderDate: { $regex: `^${todayStr}` },
+          status: "completed",
+        }).toArray();
 
-    const todayTotalSell = todayCompletedOrders.reduce(
-      (sum, order) => sum + (order.totalPrice || 0),
-      0
-    );
+        const todayTotalSell = todayCompletedOrders.reduce(
+          (sum, order) => sum + (order.totalPrice || 0),
+          0
+        );
 
-    // সব সময়ের completed অর্ডার
-    const allCompletedOrders = await orderCollection.find({ status: "completed" }).toArray();
+        // সব সময়ের completed অর্ডার
+        const allCompletedOrders = await orderCollection.find({ status: "completed" }).toArray();
 
-    const overallTotalSell = allCompletedOrders.reduce(
-      (sum, order) => sum + (order.totalPrice || 0),
-      0
-    );
+        const overallTotalSell = allCompletedOrders.reduce(
+          (sum, order) => sum + (order.totalPrice || 0),
+          0
+        );
 
-    // ৩০ দিনের অর্ডার ও বিক্রয়
-    const ordersLast30Days = await orderCollection.aggregate([
-      {
-        $match: {
-          orderDate: {
-            $regex: `^(${dateList.join('|')})`
+        // ৩০ দিনের অর্ডার ও বিক্রয়
+        const ordersLast30Days = await orderCollection.aggregate([
+          {
+            $match: {
+              orderDate: {
+                $regex: `^(${dateList.join('|')})`
+              }
+            }
+          },
+          {
+            $project: {
+              dateOnly: { $substr: ["$orderDate", 0, 10] },
+              totalPrice: 1
+            }
+          },
+          {
+            $group: {
+              _id: "$dateOnly",
+              count: { $sum: 1 },
+              totalSell: { $sum: "$totalPrice" }
+            }
+          },
+          {
+            $sort: { _id: 1 }
           }
-        }
-      },
-      {
-        $project: {
-          dateOnly: { $substr: ["$orderDate", 0, 10] },
-          totalPrice: 1
-        }
-      },
-      {
-        $group: {
-          _id: "$dateOnly",
-          count: { $sum: 1 },
-          totalSell: { $sum: "$totalPrice" }
-        }
-      },
-      {
-        $sort: { _id: 1 }
-      }
-    ]).toArray();
+        ]).toArray();
 
-    let orderCounts = {};
-    let sellCounts = {};
+        let orderCounts = {};
+        let sellCounts = {};
 
-    dateList.forEach(date => {
-      orderCounts[date] = 0;
-      sellCounts[date] = 0;
-    });
+        dateList.forEach(date => {
+          orderCounts[date] = 0;
+          sellCounts[date] = 0;
+        });
 
-    ordersLast30Days.forEach(item => {
-      orderCounts[item._id] = item.count;
-      sellCounts[item._id] = item.totalSell;
-    });
+        ordersLast30Days.forEach(item => {
+          orderCounts[item._id] = item.count;
+          sellCounts[item._id] = item.totalSell;
+        });
 
-    // সর্বোচ্চ ডিসকাউন্ট ক্যাটেগরি
-    const topDiscountCategoryAgg = await ProductCollection.aggregate([
-      {
-        $match: {
+        // সর্বোচ্চ ডিসকাউন্ট ক্যাটেগরি
+        const topDiscountCategoryAgg = await ProductCollection.aggregate([
+          {
+            $match: {
+              discount: { $gt: 0 }
+            }
+          },
+          {
+            $group: {
+              _id: "$category",
+              count: { $sum: 1 }
+            }
+          },
+          {
+            $sort: { count: -1 }
+          },
+          {
+            $limit: 1
+          }
+        ]).toArray();
+
+        const topDiscountCategory = topDiscountCategoryAgg[0]?._id || "N/A";
+        const discountedItemsCount = topDiscountCategoryAgg[0]?.count || 0;
+
+        // মোট ডিসকাউন্ট প্রোডাক্ট
+        const totalDiscountItems = await ProductCollection.countDocuments({
           discount: { $gt: 0 }
-        }
-      },
-      {
-        $group: {
-          _id: "$category",
-          count: { $sum: 1 }
-        }
-      },
-      {
-        $sort: { count: -1 }
-      },
-      {
-        $limit: 1
+        });
+
+        // রেসপন্স পাঠাও
+        res.send({
+          totalUsers,
+          totalProducts,
+          totalOrders,
+          totalWishlist,
+          orderCounts,
+          sellCounts,
+          todayTotalSell,
+          overallTotalSell,
+          topDiscountCategory,
+          discountedItemsCount,
+          totalDiscountItems
+        });
+
+      } catch (error) {
+        console.error("Admin stat error:", error);
+        res.status(500).send({ message: "Something went wrong!" });
       }
-    ]).toArray();
-
-    const topDiscountCategory = topDiscountCategoryAgg[0]?._id || "N/A";
-    const discountedItemsCount = topDiscountCategoryAgg[0]?.count || 0;
-
-    // মোট ডিসকাউন্ট প্রোডাক্ট
-    const totalDiscountItems = await ProductCollection.countDocuments({
-      discount: { $gt: 0 }
     });
 
-    // রেসপন্স পাঠাও
-    res.send({
-      totalUsers,
-      totalProducts,
-      totalOrders,
-      totalWishlist,
-      orderCounts,
-      sellCounts,
-      todayTotalSell,
-      overallTotalSell,
-      topDiscountCategory,
-      discountedItemsCount,
-      totalDiscountItems
-    });
 
-  } catch (error) {
-    console.error("Admin stat error:", error);
-    res.status(500).send({ message: "Something went wrong!" });
-  }
+
+    // -------------->banners
+    app.post('/banners', verifyToken, async (req, res) => {
+      const banner = req.body;
+      const result = await BannerCollection.insertOne(banner)
+      res.send(result)
+    })
+
+    app.get('/banners', async (req, res) => {
+      const result = await BannerCollection.find().toArray()
+      res.send(result)
+    })
+    app.get('/banners/:id', async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const result = await BannerCollection.findOne(query)
+      res.send(result)
+    })
+
+app.delete('/banners/:id', verifyToken, async (req, res) => {
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id) };
+  const result = await BannerCollection.deleteOne(query);
+  res.send(result);
 });
-
-
-
 
 
     // 
@@ -538,6 +563,6 @@ app.get('/admin-stat', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('Error starting server:', error);
   }
-  }
+}
 
 startServer();
