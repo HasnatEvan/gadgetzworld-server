@@ -60,6 +60,7 @@ async function startServer() {
     wishlistCollection = client.db('GadgetzWorld-client').collection('wishlist');
     orderCollection = client.db('GadgetzWorld-client').collection('orders');
     BannerCollection = client.db('GadgetzWorld-client').collection('banners');
+    MarqueeCollection = client.db('GadgetzWorld-client').collection('marquee');
 
     // Routes
 
@@ -120,6 +121,14 @@ async function startServer() {
       const email = req.params.email
       const result = await userCollection.findOne({ email })
       res.send({ role: result?.role })
+    })
+
+    // get all user data
+    app.get('/all-users/:email', verifyToken, async (req, res) => {
+      const email = req.params.email
+      const query = { email: { $ne: email } }
+      const result = await userCollection.find(query).toArray()
+      res.send(result)
     })
 
 
@@ -393,6 +402,8 @@ async function startServer() {
         const totalProducts = await ProductCollection.estimatedDocumentCount();
         const totalOrders = await orderCollection.estimatedDocumentCount();
         const totalWishlist = await wishlistCollection.estimatedDocumentCount();
+        const totalMarquee = await MarqueeCollection.estimatedDocumentCount();
+        const totalBanner = await BannerCollection.estimatedDocumentCount();
 
         // আজকের তারিখ 0:00 থেকে
         const today = new Date();
@@ -512,7 +523,8 @@ async function startServer() {
           overallTotalSell,
           topDiscountCategory,
           discountedItemsCount,
-          totalDiscountItems
+          totalDiscountItems,totalMarquee,
+          totalBanner
         });
 
       } catch (error) {
@@ -541,12 +553,41 @@ async function startServer() {
       res.send(result)
     })
 
-app.delete('/banners/:id', verifyToken, async (req, res) => {
-  const id = req.params.id;
-  const query = { _id: new ObjectId(id) };
-  const result = await BannerCollection.deleteOne(query);
-  res.send(result);
-});
+    app.delete('/banners/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await BannerCollection.deleteOne(query);
+      res.send(result);
+    });
+
+
+    // marquee---------------------------->
+
+     app.post('/marquee', verifyToken, async (req, res) => {
+      const product = req.body;
+      const result = await MarqueeCollection.insertOne(product)
+      res.send(result)
+    })
+     app.get('/marquee', async (req, res) => {
+      const result = await MarqueeCollection.find().toArray()
+      res.send(result)
+    })
+    app.get('/marquee/:id', async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const result = await MarqueeCollection.findOne(query)
+      res.send(result)
+    })
+
+     app.delete('/marquee/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await MarqueeCollection.deleteOne(query);
+      res.send(result);
+    });
+
+
+    
 
 
     // 
