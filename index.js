@@ -4,7 +4,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
-
+const nodemailer = require("nodemailer");
 const port = process.env.PORT || 5000;
 const app = express();
 
@@ -34,6 +34,45 @@ const verifyToken = (req, res, next) => {
     next();
   });
 };
+//send email using nodemailer
+const sendEmail = (emailAddress, emailData) => {
+  // create transporter
+  const transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false, // true for port 465, false for other ports
+    auth: {
+      user: process.env.NODEMAILER_USER,
+      pass: process.env.NODEMAILER_PASS,
+    },
+  });
+  // verify connection
+  transporter.verify((error, success) => {
+    if (error) {
+      console.log(error)
+    } else {
+      // console.log('Transporter is ready to emails', success)
+    }
+  })
+  //  transporter.sendMail()
+  const mailBody = {
+    from: process.env.NODEMAILER_USER, // sender address
+    to: emailAddress, // list of receivers
+    subject: emailData?.subject,
+    // text: emailData?.message, // plain text body
+    html: `<p>${emailData?.message}</p>`, // html body
+  }
+  // send email
+  transporter.sendMail(mailBody, (error, info) => {
+    if (error) {
+      console.log(error)
+    } else {
+      // console.log(info)
+      console('Email Sent: ' + info?.response)
+    }
+
+  })
+}
 
 // MongoDB client setup
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nnldx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -130,6 +169,28 @@ async function startServer() {
       const result = await userCollection.find(query).toArray()
       res.send(result)
     })
+
+app.delete("/user/:id", async (req, res) => {
+  const userId = req.params.id;
+
+  if (!ObjectId.isValid(userId)) {
+    return res.status(400).send({ error: "Invalid user ID" });
+  }
+
+  try {
+    const result = await userCollection.deleteOne({ _id: new ObjectId(userId) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({ error: "User not found" });
+    }
+
+    res.send({ success: true, deletedCount: result.deletedCount });
+  } catch (error) {
+    console.error("Failed to delete user:", error);
+    res.status(500).send({ error: "Server error" });
+  }
+});
+
 
 
 
@@ -261,23 +322,80 @@ async function startServer() {
 
     app.post('/orders', verifyToken, async (req, res) => {
       const product = req.body;
-
-      const now = new Date();
-
-      // Date: DD-MM-YYYY
-      const date = now.toLocaleDateString('en-GB'); // e.g. 10/07/2025
-
-      // Time: HH:MM AM/PM
-      const time = now.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      }); // e.g. 03:45 PM
-
-      product.orderDate = `${date} ${time}`; // "10/07/2025 03:45 PM"
-
       try {
         const result = await orderCollection.insertOne(product);
+
+        if (result?.insertedId) {
+          const orderInfo = product;
+
+          // ✅ Email to Customer
+          const customerEmailData = {
+            subject: "✅ Order Placed Successfully - Gadget'z World",
+            message: `
+          <div style="font-family: Arial, sans-serif; color: #333;">
+            <h2 style="color: #1a73e8;">Hi ${orderInfo.customer?.name || "Customer"},</h2>
+            <p>Thank you for shopping with <strong>Gadget'z World</strong>! 🎉</p>
+            
+            <h3 style="color: #4caf50;">🧾 Order Summary</h3>
+            <ul>
+              <li><strong>Product:</strong> ${orderInfo.productName}</li>
+              <li><strong>Quantity:</strong> ${orderInfo.quantity}</li>
+              <li><strong>Total Price:</strong> <span style="color: #d32f2f;">৳${orderInfo.totalPrice}</span></li>
+              <li><strong>Payment Method:</strong> ${orderInfo.paymentMethod}</li>
+              <li><strong>Transaction ID:</strong> ${orderInfo.transactionId}</li>
+              <li><strong>Order Date:</strong> ${orderInfo.orderDate}</li>
+            </ul>
+
+            <h3 style="color: #4caf50;">📦 Shipping Address</h3>
+            <p>
+              ${orderInfo.customer.fullAddress}<br/>
+              ${orderInfo.customer.thana}, ${orderInfo.customer.district}<br/>
+              Phone: ${orderInfo.customer.phone}
+            </p>
+
+            <p>We will contact you soon to confirm delivery. If you have any questions, feel free to reply to this email.</p>
+
+            <p style="margin-top: 30px;">Warm regards,<br/><strong>Gadget'z World Team</strong></p>
+          </div>
+        `,
+          };
+          await sendEmail(orderInfo.customer.email, customerEmailData);
+
+          // ✅ Email to Seller
+          const sellerEmailData = {
+            subject: "📦 New Order Alert - Gadget'z World",
+            message: `
+          <div style="font-family: Arial, sans-serif; color: #333;">
+            <h2 style="color: #e65100;">New Order Received!</h2>
+            <p>You have received a new order from <strong>${orderInfo.customer.name}</strong> (${orderInfo.customer.email}).</p>
+
+            <h3 style="color: #4caf50;">🛒 Product Details</h3>
+            <ul>
+              <li><strong>Product:</strong> ${orderInfo.productName}</li>
+              <li><strong>Quantity:</strong> ${orderInfo.quantity}</li>
+              <li><strong>Total Price:</strong> <span style="color: #d32f2f;">৳${orderInfo.totalPrice}</span></li>
+              <li><strong>Order Date:</strong> ${orderInfo.orderDate}</li>
+            </ul>
+
+            <h3 style="color: #4caf50;">📍 Shipping Info</h3>
+            <p>
+              ${orderInfo.customer.fullAddress}<br/>
+              ${orderInfo.customer.thana}, ${orderInfo.customer.district}<br/>
+              Phone: ${orderInfo.customer.phone}
+            </p>
+
+            <p><strong>Payment Method:</strong> ${orderInfo.paymentMethod}<br/>
+            <strong>Transaction ID:</strong> ${orderInfo.transactionId}</p>
+
+            <p>Please process the order as soon as possible to ensure timely delivery.</p>
+
+            <p style="margin-top: 30px;">Regards,<br/><strong>Gadget'z World System</strong></p>
+          </div>
+        `,
+          };
+          await sendEmail(orderInfo.seller, sellerEmailData);
+        }
+
         res.send(result);
       } catch (error) {
         console.error(error);
@@ -344,6 +462,7 @@ async function startServer() {
         );
 
         if (result.modifiedCount > 0) {
+
           return res.send({ message: 'Order status updated successfully', modifiedCount: result.modifiedCount });
         } else {
           return res.status(500).send({ message: 'Failed to update order status' });
@@ -523,7 +642,8 @@ async function startServer() {
           overallTotalSell,
           topDiscountCategory,
           discountedItemsCount,
-          totalDiscountItems,totalMarquee,
+          totalDiscountItems,
+          totalMarquee,
           totalBanner
         });
 
@@ -563,12 +683,12 @@ async function startServer() {
 
     // marquee---------------------------->
 
-     app.post('/marquee', verifyToken, async (req, res) => {
+    app.post('/marquee', verifyToken, async (req, res) => {
       const product = req.body;
       const result = await MarqueeCollection.insertOne(product)
       res.send(result)
     })
-     app.get('/marquee', async (req, res) => {
+    app.get('/marquee', async (req, res) => {
       const result = await MarqueeCollection.find().toArray()
       res.send(result)
     })
@@ -579,7 +699,7 @@ async function startServer() {
       res.send(result)
     })
 
-     app.delete('/marquee/:id', verifyToken, async (req, res) => {
+    app.delete('/marquee/:id', verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await MarqueeCollection.deleteOne(query);
@@ -587,7 +707,7 @@ async function startServer() {
     });
 
 
-    
+
 
 
     // 
