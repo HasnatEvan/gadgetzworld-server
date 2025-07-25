@@ -170,26 +170,26 @@ async function startServer() {
       res.send(result)
     })
 
-app.delete("/user/:id", async (req, res) => {
-  const userId = req.params.id;
+    app.delete("/user/:id", async (req, res) => {
+      const userId = req.params.id;
 
-  if (!ObjectId.isValid(userId)) {
-    return res.status(400).send({ error: "Invalid user ID" });
-  }
+      if (!ObjectId.isValid(userId)) {
+        return res.status(400).send({ error: "Invalid user ID" });
+      }
 
-  try {
-    const result = await userCollection.deleteOne({ _id: new ObjectId(userId) });
+      try {
+        const result = await userCollection.deleteOne({ _id: new ObjectId(userId) });
 
-    if (result.deletedCount === 0) {
-      return res.status(404).send({ error: "User not found" });
-    }
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ error: "User not found" });
+        }
 
-    res.send({ success: true, deletedCount: result.deletedCount });
-  } catch (error) {
-    console.error("Failed to delete user:", error);
-    res.status(500).send({ error: "Server error" });
-  }
-});
+        res.send({ success: true, deletedCount: result.deletedCount });
+      } catch (error) {
+        console.error("Failed to delete user:", error);
+        res.status(500).send({ error: "Server error" });
+      }
+    });
 
 
 
@@ -270,6 +270,7 @@ app.delete("/user/:id", async (req, res) => {
       const result = await ProductCollection.findOne(query)
       res.send(result)
     })
+    
 
 
 
@@ -280,6 +281,7 @@ app.delete("/user/:id", async (req, res) => {
       const result = await wishlistCollection.insertOne(product)
       res.send(result)
     })
+ /
 
     app.get('/wishlist', async (req, res) => {
       const email = req.query.email;
@@ -296,6 +298,7 @@ app.delete("/user/:id", async (req, res) => {
         res.status(500).send({ message: "Internal server error" });
       }
     });
+   
 
     app.delete('/wishlist', async (req, res) => {
       const { productId, email } = req.body;
@@ -317,6 +320,13 @@ app.delete("/user/:id", async (req, res) => {
         res.status(500).send({ message: "Internal server error" });
       }
     });
+    
+
+     // / get all product data in db
+    app.get('/allWishlist',verifyToken, async (req, res) => {
+      const result = await wishlistCollection.find().toArray()
+      res.send(result)
+    })
 
     // Order Collection---------------------->
 
